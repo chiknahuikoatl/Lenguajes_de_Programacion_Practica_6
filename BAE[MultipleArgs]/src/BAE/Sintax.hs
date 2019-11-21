@@ -293,7 +293,9 @@ subst (LetCC v e) (y, f)
     | otherwise = error "Substitution not in free variables."
 subst (Continue e1 e2) s = (Continue (subst e1 s) (subst e2 s))
 subst (Raise e) s = (Raise (subst e s))
-subst (Handle e1 v e2) =
+subst (Handle e1 v e2) (y, e)
+    | y == v = (Handle e1 v e2)
+    | otherwise = (Handle e1 y (subst e2 (y, e)))
 
 incrVar :: Identifier -> Identifier
 incrVar v = (incrVarAux v)
@@ -340,10 +342,11 @@ alphaEq (Assig e1 e2) (Assig f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
 alphaEq (Void) (Void) = True
 alphaEq (Seq e1 e2) (Seq f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
 alphaEq (While e1 e2) (While f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
---LetCC
+alphaEq (LetCC v1 e1 e2) (LetCC v2 e3 e4) = auxAE (LetCC v1 e1 e2) (Let v2 e3 e4)
 alphaEq (Continue e1 e2) (Continue f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
+alphaEq (Cont (x:xs)) (Cont (y:ys)) = (y == x) && (alphaEq (Cont xs) (Cont ys))
 alphaEq (Raise e1) (Raise e2) =  (alphaEq e1 e2)
---HAndle
+alphaEq (Handle e1 v e2) (Handle f1 u e2) = auxAE (Handle e1 v e2) (Handle f1 u e2)
 
 
 
@@ -363,3 +366,12 @@ sacaInt [] = []
 sacaInt (c:cs)
     | (isDigit c) = [c] ++ (sacaInt cs)
     | otherwise = []
+
+auxAE :: Expr -> Expr -> Bool
+auxAE (Let v e1 e2) (Let u f1 f2) =
+    | v == u = (alphaEq e1 f1) && (alphaEq e2 f2)
+    | otherwise = (auxAE (Let v e1 e2) (subst (Let u f1 f2) (u, v) ))
+auxAE (LetCC v e) (LetCC u f) = (auxAE (LetCC v e) (subst (LetCC u e) (u, v)))
+auxAE (Handle v e1 e2) (Handle u f1 f2) =
+    | v == u = (alphaEq e1 f1) && (alphaEq e2 f2)
+    | otherwise = (auxAE (Handle v e1 e2) (subst (Handle u f1 f2) (u, v) ))
