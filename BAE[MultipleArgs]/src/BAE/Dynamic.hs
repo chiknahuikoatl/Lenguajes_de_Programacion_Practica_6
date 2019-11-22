@@ -245,6 +245,7 @@ isValor e
 	| e == (L n) = True
 	|otherwise = False
 
+{-Show de Let, if's de Seq y While , raise and handle-}
 eval1 :: State -> State
 eval1 (E m (xs) e)
 	|(isValor e) = (R (m (xs) e)
@@ -273,41 +274,70 @@ eval1 (E m (xs) e)
 	|(e == (EqFL e1 e2) && (e1 == (I _))) = (E (m ((EqFR e1 ()):xs) e2))
 	|(e == (EqFL e1 e2)) = error "Error a aplicar equal"
 	|(e == (If e1 e2 e3)) = (E (m ((IfF () e2 e3):xs) e1))
-	|(
+	|(e == (Let v e1 e2)) = (E (m ((LetFL () e1 e2):xs) v))
+	|(e == (LetFR v e1 e2) && (v == (V _))) = (E (m ((LetFR v () e2):xs) e1))
+	|(e == (Fn v e)) = (E (m ((FnFL () e):xs) v))
+	|(e == (FnFR v e) && (v == (V _))) = (E (m ((FnFR v ()):xs) e))
+	|(e == (App e1 e2)) = (E (m ((AppFL () e2):xs) e1))
+	|(e == (AppFL e1 e2) && (normal e1) = (E (m ((AppFR e1 ()):xs) e2))
+	|(e == (Alloc e)) = (E (m ((AllocF ()):xs) e))
+	|(e == (Deref e)) = (E (m ((DerefF ()):xs) e))
+	|(e == (Assig e1 e2)) = (E (m ((AssigFL () e2):xs) e1))
+	|(e == (AssigFL e1 e2) && (e1 == (L _))) = (E (m ((AssigFR e1 ()):xs) e2))
+	|(e == (Seq e1 e2)) = (E (m ((SeqFL () e2):xs) e1))
+	|(e == (SeqFL e1 e2) = (E (m ((AssigFR e1 ()):xs) e2))
+	|(e == (While e1 e2)) = (E (m ((WhileFL () e2):xs) e1))
+	|(e == (WhileFL e1 e2)) = (E (m ((WhileFR e1 ()):xs) e2))
+	|(e == (raise e)) = (E (m ((raiseF ()):xs) e)
 eval1 (R m (s:xs) e)
 	|isValor (e) = case s of
+    		([]) -> e
 		(AddFL () e2) -> (E (m xs (AddFL e e2)))
 		(AddFR e1 ()) ->
-			if ((e1 == (I _) && (e == (I _))) then (E (m xs (eval1 (Add e1 e)))) else error "Error a sumar"
+			if ((e1 == (I _)) && (e == (I _))) then (E (m xs (eval1 (Add e1 e)))) else error "Error a sumar"
 		(MulFL () e2) -> (E (m xs (MulFL e e2)))
 		(MulFR e1 ()) ->
-			if ((e1 == (I _) && (e == (I _))) then (E (m xs (eval1 (Mul e1 e)))) else error "Error a multiplicar"
+			if ((e1 == (I _)) && (e == (I _))) then (E (m xs (eval1 (Mul e1 e)))) else error "Error a multiplicar"
 		(SuccF ()) -> if (e == (I _)) then (E (m xs (eval1 (Succ e)))) else error "Error a aplicar succesor"
-		(PredF ()) -> if (e == (I _)) then (E (m xs (eval1 (Pred e)))) else error "Error a aplicar predecesso	r"
+		(PredF ()) -> if (e == (I _)) then (E (m xs (eval1 (Pred e)))) else error "Error a aplicar predecessor"
 		(NotF ()) -> if (e == (B _)) then (E (m xs (eval1 (Not e)))) else error "Error a aplicar not"
 		(AndFL () e2) -> (E (m xs (AndFL e e2)))
 		(AndFR e1 ()) ->
-			if ((e1 == (B _) && (e == (B _))) then (E (m xs (eval1 (And e1 e)))) else error "Error a aplicar and"
+			if ((e1 == (B _)) && (e == (B _))) then (E (m xs (eval1 (And e1 e)))) else error "Error a aplicar and"
 		(OrFL () e2) -> (E (m xs (OrFL e e2)))
 		(OrFR e1 ()) ->
-			if ((e1 == (B _) && (e == (B _))) then (E (m xs (eval1 (Or e1 e)))) else error "Error a aplicar or"
+			if ((e1 == (B _)) && (e == (B _))) then (E (m xs (eval1 (Or e1 e)))) else error "Error a aplicar or"
 		(LtFL () e2) -> (E (m xs (LtFL e e2)))
 		(LtFR e1 ()) ->
-			if ((e1 == (I _) && (e == (I _))) then (E (m xs (eval1 (Lt e1 e)))) else error "Error a aplicar less than"
+			if ((e1 == (I _)) && (e == (I _))) then (E (m xs (eval1 (Lt e1 e)))) else error "Error a aplicar less than"
 		(GtFL () e2) -> (E (m xs (GtFL e e2)))
 		(GtFR e1 ()) ->
-			if ((e1 == (I _) && (e == (I _))) then (E (m xs (eval1 (Gt e1 e)))) else error "Error a aplicar less than"
+			if ((e1 == (I _)) && (e == (I _))) then (E (m xs (eval1 (Gt e1 e)))) else error "Error a aplicar less than"
 		(EqFL () e2) -> (E (m xs (EqFL e e2)))
 		(EqFR e1 ()) ->
-			if ((e1 == (I _) && (e == (I _))) then (E (m xs (eval1 (Eq e1 e)))) else error "Error a aplicar less than"
+			if ((e1 == (I _)) && (e == (I _))) then (E (m xs (eval1 (Eq e1 e)))) else error "Error a aplicar less than"
 		(IfF () e2 e3) -> if (e == (B _)) then (E (m xs (if(e == (B True)) then e2 else e2)) else error "Error a aplicar if"
+  		(LetFL () e1 e2) -> (E (m xs (LetFR e e1 e2)))
+		(LetFR v () e2) -> if (v == (V _)) then (E (m xs (eval1 (Let v e e2)))) else error "Error a aplicar let"
+		(FnFL () e1) -> (E (m xs (FnFR e e1)))
+		(FnFR v ()) -> if (v == (V _)) then (E (m xs (eval1 (Fn v e)))) else error "Error a aplicar fn"
+		(AppFL () e2) -> (E (m xs (AppFL e e2)))
+		(AppFR e1 ()) ->
+			if ((normal e1) && (normal e)) then (E (m xs (eval1 (App e1 e)))) else error "Error a aplicar app"
+		(AllocF ()) -> if (e == (L _)) then (E (m' xs e')) else error "Error a aplicar alloc" where (m',e') = (m,(eval1 (Alloc e)))
+		(DerefF ()) -> if (e == (L _)) then (E (m' xs e')) else error "Error a aplicar deref" where (m',e') = (m,(eval1 (Deref e)))
+		(AssigFL () e2) -> (E (m xs (AssigFL e e2)))
+		(AssigFR e1 ()) ->
+		      if ((e1 == (L _)) && (isValor e2)) then (E (m' xs e')) else error "Error a aplicar assig" where (m',e') = (m,(eval1 (Assig e1 e)))
+		(SeqFL () e2) -> (E (m xs (SeqFL e e2)))
+		(SeqFR e1 ()) ->
+		      if (True) then (E (m' xs e')) else error "Error a aplicar seq" where (m',e') = (m,(eval1 (Seq e1 e)))
+		(WhileFL () e2) -> (E (m xs (WhileFL e e2)))
+		(WhileFR e1 ()) ->
+		      if (True) then (E (m' xs e')) else error "Error a aplicar while" where (m',e') = (m,(eval1 (While e1 e)))
+		(raiseF e) -> (P (m xs (raise e)))
 	|otherwise = error "Error"
-
-
-
-
-
-
+eval1 (P m (s:xs) e) = (I 1)
 
 
 
