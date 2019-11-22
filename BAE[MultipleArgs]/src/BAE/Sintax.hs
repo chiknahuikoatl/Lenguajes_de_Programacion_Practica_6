@@ -58,11 +58,73 @@ instance Show Expr where
         (Raise e) -> "Raise("++show(e)++")"
         (Handle e1 v e2) -> "Handle("++show(e1)++", "++show(v)++"."++show(e2)++")"
 
-data Instruction = I Int | B Bool
-                 | ADD | AND | DIV | Eq
-                 | EXEC | GET| Gt | Lt
-                 | MUL | NOT | POP | REM | SEL | SUB | SWAP
-                 | ES [Instruction] deriving (Show)
+data Frame = FnF Identifier Pending
+           | AddFL Pending Expr
+           | AddFR Expr Pending
+           | MulFL Pending Expr
+           | MulFR Expr Pending
+           | SuccF Pending
+           | PredF Pending
+           | NotF Pending
+           | AndFL Pending Expr
+           | AndFR Expr Pending
+           | OrFL Pending Expr
+           | OrFR Expr Pending
+           | LtFL Pending Expr
+           | LtFR Expr Pending
+           | GtFL Pending Expr
+           | GtFR Expr Pending
+           | EqFL Pending Expr
+           | EqFR Expr Pending
+           | IfF Pending Expr Expr
+           -- | Let
+           -- | Fn
+           | AppFL Pending Expr
+           | AppFR Expr Pending
+           | AllocF Pending
+           | DerefF Pending
+           | AssigFL Pending Expr
+           | AssigFR Expr Pending
+           | SeqFL Pending Expr
+           | SeqFR Expr Pending
+           | WhileFL Pending Expr
+           | WhileFR Expr Pending deriving (Eq)
+
+instance Show Frame where
+    show e = case e of
+        (AddFL p e2) -> "Sum(-, " ++ (show e2) ++ ")"
+        (AddFR e1 p) -> "Sum(" ++ (show e1) ++"-)"
+        (MulFL p e2) -> "Mul(-, " ++ (show e2) ++ ")"
+        (MulFR e1 p) -> "Mul(" ++ (show e1) ++"-)"
+        (Succ n) -> "Succ(-)"
+        (Pred n) -> "Pred(-)"
+        (Not e) -> "Not(-)"
+        (AndFL p e2) -> "And(-, " ++ (show e2) ++ ")"
+        (AndFR e1 p) -> "And(" ++ (show e1) ++"-)"
+        (OrFL p e2) -> "Or(-, " ++ (show e2) ++ ")"
+        (OrFR e1 p) -> "Or(" ++ (show e1) ++"-)"
+        (LtFL p e2) -> "Lt(-, " ++ (show e2) ++ ")"
+        (LtFR e1 p) -> "Lt(" ++ (show e1) ++"-)"
+        (GtFL p e2) -> "Gt(-, " ++ (show e2) ++ ")"
+        (GtFR e1 p) -> "Gt(" ++ (show e1) ++"-)"
+        (EqFL p e2) -> "Eq(-, " ++ (show e2) ++ ")"
+        (EqFR e1 p) -> "Eq(" ++ (show e1) ++"-)"
+        (If e1 e2 e3) -> "If(-," ++ (show e2) ++ ", " ++ (show e3) ++ ")"
+        (Let v e1 e2) -> "Let(" ++ (show e1) ++ ", " ++ (show v) ++ "." ++ (show e2) ++ ")"
+        (Fn v e) -> "\\"++v++"->"++(show e)
+        (AppFL p e2) -> "App(-, " ++ (show e2) ++ ")"
+        (AppFR e1 p) -> "App(" ++ (show e1) ++"-)"
+        (L n) -> "L "++ (show n)
+        Void -> "Void"
+        (Alloc n) -> "Alloc(-)"
+        (Deref e) -> "Deref(-)"
+        (AssigFL p e2) -> "Assig(-, " ++ (show e2) ++ ")"
+        (AssigFR e1 p) -> "Assig(" ++ (show e1) ++"-)"
+        (SeqFL p e2) -> "Seq(-, " ++ (show e2) ++ ")"
+        (SeqFR e1 p) -> "Seq(" ++ (show e1) ++"-)"
+        (WhileFL p e2) -> "While(-, " ++ (show e2) ++ ")"
+        (WhileFR e1 p) -> "While(" ++ (show e1) ++"-)"
+
 
 type Identifier = String
 type Substitution = (Identifier, Expr)
@@ -71,17 +133,16 @@ type Value = Expr
 type Cell = (Address, Value)
 type Memory = [Cell]
 
-type Program = [Instruction]
-
+type Pending = ()
 type Stack = [Frame]
-instance Show Stack where
-    show s = case s of
-        [] -> ""
-        (k:ks) -> (show k)++", "++(show ks)
+-- instance Show Stack where
+--     show s = case s of
+--         [] -> ""
+--         (k:ks) -> (show k)++", "++(show ks)
 
 data State = E (Memory, Stack, Expr)
            | R (Memory, Stack, Expr)
-           | P (Memory, Stack, Expr) deriving (Show)
+           | P (Memory, Stack, Expr) deriving (Eq)
 
 instance Show State where
     show s = case s of
@@ -95,134 +156,6 @@ instance Show State where
 
 
 -- Function declaration
-
-arithOperation :: Instruction -> Instruction -> Instruction -> Instruction
-arithOperation (I f) (I s) ADD = (I (f + s))
-arithOperation (I f) (I s) SUB = (I (f - s))
-arithOperation (I f) (I s) MUL = (I (f * s))
-arithOperation _ (I 0) DIV = error "Divided by zero."
-arithOperation (I f) (I s) DIV = (I (div f s))
-arithOperation _ (I 0) REM = error "Divided by zero."
-arithOperation (I f) (I s) REM = (I (mod f s))
-arithOperation _ _ _ = error "Operation error"
-
-
-bboolOperation :: Instruction -> Instruction -> Instruction -> Instruction
-bboolOperation (B f) (B s) AND = (B (f && s))
-bboolOperation _ _ AND = error "Both perands are not boolean"
-
-uboolOperation :: Instruction -> Instruction -> Instruction
-uboolOperation (B f) NOT = (B (not f))
-uboolOperation _ NOT = error "Not a boolean operand."
-
-relOperation :: Instruction -> Instruction -> Instruction -> Instruction
-relOperation (I f) (I s) Eq = (B (f == s))
-relOperation (I f) (I s) Lt = (B (f < s))
-relOperation (I f) (I s) Gt = (B (f > s))
-relOperation _ _ _ = error "relOperation: Invalid arguments."
-
--- Have to check if third operator in SEL is a bool
-stackOperation :: Stack -> Instruction -> Stack
-stackOperation xs (I n) = ((I n):xs)
-stackOperation xs (B b) = ((B b):xs)
-stackOperation [] _ = error "Empty stack error."
-stackOperation (x:xs) POP = xs
-stackOperation (x:[]) _ = error "Not enough elements on stack."
-stackOperation (x:y:xs) SWAP = (y:x:xs)
-stackOperation (x:y:[]) SEL = error "Not enough elements on stack."
-stackOperation (x:y:(B b):xs) SEL
-    | b == False = x:xs
-    | otherwise = y:xs
-stackOperation (x:y:_:xs) SEL = error "Third element in stack is not boolean."
-stackOperation ((I n):xs) GET = ((auxiliarGet xs n):xs)
-stackOperation (_:xs) GET = error "Invalid parameter for GET"
-
-auxiliarGet :: Stack -> Int -> Instruction
-auxiliarGet [] _  = error "Not enough elements in stack."
-auxiliarGet (x:xs) 1 = x
-auxiliarGet (x:xs) n = (auxiliarGet xs (n-1))
-
-execOperation :: Program -> Stack  -> Instruction -> (Program, Stack)
-execOperation p ((ES q):xs) EXEC = (q ++ p, xs)
-execOperation p [] EXEC = error "Nothing to execute"
-execOperation _ _ _ = error "Invalid operation"
-
-
-
-executeProgram :: Program -> Stack -> Stack
-executeProgram [] s = s
-executeProgram ((I n):xs) s = (executeProgram xs (stackOperation s (I n)))
-executeProgram ((B b):xs) s = (executeProgram xs (stackOperation s (B b)))
-executeProgram ((ES i):xs) s = (executeProgram xs ((ES i):s))
-executeProgram ((ADD):xs) ((I x):(I y):s) = (executeProgram xs ((arithOperation (I y) (I x) ADD):s))
-executeProgram ((ADD):xs) _ = error "Invalid parameters"
-executeProgram ((SUB):xs) ((I x):(I y):s) = (executeProgram xs ((arithOperation (I y) (I x) SUB):s))
-executeProgram ((SUB):xs) _ = error "Invalid parameters"
-executeProgram ((MUL):xs) ((I x):(I y):s) = (executeProgram xs ((arithOperation (I y) (I x) MUL):s))
-executeProgram ((MUL):xs) _ = error "Invalid parameters"
-executeProgram ((DIV):xs) ((I x):(I y):s) = (executeProgram xs ((arithOperation (I y) (I x) DIV):s))
-executeProgram ((DIV):xs) _ = error "Invalid parameters"
-executeProgram ((REM):xs) ((I x):(I y):s) = (executeProgram xs ((arithOperation (I y) (I x) REM):s))
-executeProgram ((REM):xs) _ = error "Invalid parameters"
-executeProgram ((AND):xs) ((B f):(B t):s) = (executeProgram xs ((bboolOperation (B f) (B t) AND):s))
-executeProgram ((AND):_) _ = error "Parámetros inválidos"
-executeProgram ((NOT):xs) ((B f):s) = (executeProgram xs ((uboolOperation (B f) NOT):s))
-executeProgram ((NOT):_) _ = error "Not enough parameters"
-executeProgram ((Eq):xs) ((I x):(I y):s) = (executeProgram xs ((relOperation (I y) (I x) Eq):s))
-executeProgram ((Eq):xs) _ = error "Invalid parameters"
-executeProgram ((Gt):xs) ((I x):(I y):s) = (executeProgram xs ((relOperation (I y) (I x) Gt):s))
-executeProgram ((Gt):xs) _ = error "Invalid parameters"
-executeProgram ((Lt):xs) ((I x):(I y):s) = (executeProgram xs ((relOperation (I y) (I x) Lt):s))
-executeProgram ((Lt):xs) _ = error "Invalid parameters"
-executeProgram ((GET):xs) s = (executeProgram xs (stackOperation s GET))
-executeProgram ((SEL):xs) s = (executeProgram xs (stackOperation s SEL))
-executeProgram ((SWAP):xs) s = (executeProgram xs (stackOperation s SWAP))
-executeProgram ((POP):xs) s = (executeProgram xs (stackOperation s POP))
-executeProgram ((EXEC):xs) s = (let (a,b) = (execOperation xs s EXEC) in executeProgram a b)
--- Falta resolver executeOperation
---executeProgram
-
---
-compile :: Expr -> Program
-compile (N n) = [(I n)]
-compile T = [(B True)]
-compile F = [(B False)]
-compile (Succ e) = ((compile e) ++ [(I 1), ADD])
-compile (Pred e) = ((compile e) ++ [(I 1), SUB])
-compile (e1 :+ e2) = ((compile e1) ++ (compile e2) ++ [ADD])
-compile (e1 :- e2) = ((compile e1) ++ (compile e2) ++ [SUB])
-compile (e1 :* e2) = ((compile e1) ++ (compile e2) ++ [MUL])
-compile (e1 :/ e2) = ((compile e1) ++ (compile e2) ++ [DIV])
-compile (e1 :% e2) = ((compile e1) ++ (compile e2) ++ [REM])
-compile (Max e1 e2) = ( (compile e1) ++ (compile e2) ++ [Gt] ++ (compile e1) ++ (compile e2) ++ [SEL])
-compile (Min e1 e2) = ((compile e1) ++ (compile e2) ++ [Gt] ++ (compile e2) ++ (compile e1) ++ [SEL])
-compile (Not e) = ((compile e) ++ [NOT])
-compile (e1 :& e2) = ((compile e1) ++ (compile e2) ++ [AND])
-compile (e1 :| e2) = (((compile e1) ++ [NOT]) ++ ((compile e2) ++ [NOT]) ++ [AND, NOT])
-compile (e1 :> e2) = ((compile e1) ++ (compile e2) ++ [Gt])
-compile (e1 :< e2) = ((compile e1) ++ (compile e2) ++ [Lt])
-compile (e1 := e2) = ((compile e1) ++ (compile e2) ++ [Eq])
-compile (Fact e) = (compile e) ++ [ES [(I 2), GET, (I 1), Lt,
-                     (ES [POP, POP, (I 1)]),
-                     (ES [(I 2), GET, (I 1), SUB, (I 2), GET, (I 1), GET,
-                         EXEC, SWAP, POP, MUL]),
-                     SEL, EXEC],
-                     (I 1), GET, EXEC]
-compile (e1 :^ e2) = (compile e1) ++ (compile e2) ++
-                [(ES [(I 2), GET, (I 1), Lt,
-                    (ES [POP, POP, POP, (I 1)]),
-                    (ES [SWAP, (I 1), SUB, (I 3), GET, SWAP, (I 3), GET,
-                        (I 1), GET, EXEC, SWAP, POP, MUL]),
-                    SEL, EXEC]),
-                (I 1), GET, EXEC]
-
-execute :: Expr -> Instruction
-execute e
-    | ((length (executeProgram (compile e) [])) > 1) = error "Stack finished with more than one element"
-    | otherwise = (head (executeProgram (compile e) []))
-
-
-
 
 frVars :: Expr -> [Identifier]
 frVars (V i) = [i]
@@ -346,7 +279,7 @@ alphaEq (LetCC v1 e1 e2) (LetCC v2 e3 e4) = auxAE (LetCC v1 e1 e2) (Let v2 e3 e4
 alphaEq (Continue e1 e2) (Continue f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
 alphaEq (Cont (x:xs)) (Cont (y:ys)) = (y == x) && (alphaEq (Cont xs) (Cont ys))
 alphaEq (Raise e1) (Raise e2) =  (alphaEq e1 e2)
-alphaEq (Handle e1 v e2) (Handle f1 u e2) = auxAE (Handle e1 v e2) (Handle f1 u e2)
+alphaEq (Handle e1 v e2) (Handle f1 u f2) = auxAE (Handle e1 v e2) (Handle f1 u f2)
 
 
 
