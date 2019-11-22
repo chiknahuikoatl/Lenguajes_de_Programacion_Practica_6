@@ -79,7 +79,7 @@ instance Show Stack where
         [] -> ""
         (k:ks) -> (show k)++", "++(show ks)
 
-type State = E (Memory, Stack, Expr)
+data State = E (Memory, Stack, Expr)
            | R (Memory, Stack, Expr)
            | P (Memory, Stack, Expr) deriving (Show)
 
@@ -333,7 +333,7 @@ alphaEq (Let v1 e1 e2) (Let v2 e3 e4)
     | auxAE (Let v1 e1 e2) (Let v2 e3 e4) = True
     | otherwise = False
 alphaEq (Let v1 e1 e2) _ = False
-alphaEq (Fn v e) (Fn u f) = (alphaEq e (subst f (u, v))
+alphaEq (Fn v e) (Fn u f) = (alphaEq e (subst f (u, v)))
 alphaEq (App e1 e2) (App f1 f2) = (alphaEq e1 f1) && (alphaEq e2 f2)
 alphaEq (L n) (L m) = m == n
 alphaEq (Alloc e1) (Alloc e2) =  (alphaEq e1 e2)
@@ -368,10 +368,10 @@ sacaInt (c:cs)
     | otherwise = []
 
 auxAE :: Expr -> Expr -> Bool
-auxAE (Let v e1 e2) (Let u f1 f2) =
+auxAE (Let v e1 e2) (Let u f1 f2)
     | v == u = (alphaEq e1 f1) && (alphaEq e2 f2)
     | otherwise = (auxAE (Let v e1 e2) (subst (Let u f1 f2) (u, v) ))
 auxAE (LetCC v e) (LetCC u f) = (auxAE (LetCC v e) (subst (LetCC u e) (u, v)))
-auxAE (Handle v e1 e2) (Handle u f1 f2) =
+auxAE (Handle v e1 e2) (Handle u f1 f2)
     | v == u = (alphaEq e1 f1) && (alphaEq e2 f2)
     | otherwise = (auxAE (Handle v e1 e2) (subst (Handle u f1 f2) (u, v) ))
